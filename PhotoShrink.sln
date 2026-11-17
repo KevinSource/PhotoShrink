@@ -1,0 +1,28 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhotoShrink", "PhotoShrink\PhotoShrink.csproj", "{3C2B1E5A-7F41-4C8E-9D11-6A2F0B8E4C01}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhotoShrink.TestKit", "PhotoShrink.TestKit\PhotoShrink.TestKit.csproj", "{8E7D4A21-0B3C-4F59-A6E2-1D9C5B7F3A02}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3C2B1E5A-7F41-4C8E-9D11-6A2F0B8E4C01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C2B1E5A-7F41-4C8E-9D11-6A2F0B8E4C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C2B1E5A-7F41-4C8E-9D11-6A2F0B8E4C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C2B1E5A-7F41-4C8E-9D11-6A2F0B8E4C01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8E7D4A21-0B3C-4F59-A6E2-1D9C5B7F3A02}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E7D4A21-0B3C-4F59-A6E2-1D9C5B7F3A02}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E7D4A21-0B3C-4F59-A6E2-1D9C5B7F3A02}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E7D4A21-0B3C-4F59-A6E2-1D9C5B7F3A02}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

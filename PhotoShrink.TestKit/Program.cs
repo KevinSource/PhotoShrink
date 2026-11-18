@@ -382,6 +382,8 @@ internal static class Program
         Check(File.Exists(portraitCopy) && IsUpright(portraitCopy), "portrait copy is upright");
         int extra = Directory.GetFiles(dir).Length - files.Count;
         Check(extra == shrunk.Count, $"only the {shrunk.Count} shrunk copies were added (found {extra} new files)");
+        Check(!batches[0].Summary.Contains("Saved:") && batches[0].Summary.Contains("smaller than the originals"),
+            "summary doesn't claim space was saved (originals are kept)");
         PrintSummary(batches[0]);
         W();
     }

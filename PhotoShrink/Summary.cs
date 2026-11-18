@@ -40,7 +40,11 @@ internal static class Summary
         sb.AppendLine($"Shrink to {maxSize} px — {results.Count} file(s) in {elapsed.TotalSeconds:0.0} s");
         if (oneFolder) sb.AppendLine($"Folder: {folders[0]}");
         sb.AppendLine();
-        sb.AppendLine($"Shrunk: {shrunk.Count}    Skipped: {skipped.Count}    Failed: {failed.Count}    Saved: {Format.Bytes(saved)}");
+        // In copy mode the originals stay, so nothing is saved on disk; report how much smaller the copies are.
+        string savings = mode == ShrinkMode.SaveCopy
+            ? $"Copies are {Format.Bytes(saved)} smaller than the originals"
+            : $"Saved: {Format.Bytes(saved)}";
+        sb.AppendLine($"Shrunk: {shrunk.Count}    Skipped: {skipped.Count}    Failed: {failed.Count}    {savings}");
         if (shrunk.Count > 0)
         {
             sb.AppendLine(ShrinkModeText.Summary(mode, maxSize));
@@ -64,8 +68,10 @@ internal static class Summary
                     sb.AppendLine($"  {new string(' ', nameWidth)}  note: {r.Note}");
             }
             long oldTotal = shrunk.Sum(r => r.OldBytes), newTotal = shrunk.Sum(r => r.NewBytes);
-            sb.AppendLine($"  Total: {Format.Bytes(oldTotal)} -> {Format.Bytes(newTotal)}, saved {Format.Bytes(saved)}" +
-                          (oldTotal > 0 ? $" ({(double)saved / oldTotal:P0})" : ""));
+            string pct = oldTotal > 0 ? $" ({(double)saved / oldTotal:P0})" : "";
+            sb.AppendLine(mode == ShrinkMode.SaveCopy
+                ? $"  Total: originals {Format.Bytes(oldTotal)}, copies {Format.Bytes(newTotal)}, {Format.Bytes(saved)}{pct} smaller"
+                : $"  Total: {Format.Bytes(oldTotal)} -> {Format.Bytes(newTotal)}, saved {Format.Bytes(saved)}{pct}");
             sb.AppendLine();
         }
 

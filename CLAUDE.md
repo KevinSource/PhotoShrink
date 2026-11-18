@@ -30,7 +30,7 @@ PhotoShrink/                  the app (WinExe, no console window)
   ShellIntegration.cs         registry keys + Send To .lnk files (IShellLinkW COM interop)
 PhotoShrink.TestKit/          console app: end-to-end tests (makes images, launches exe per file)
 run-tests.cmd                 build + run the test kit
-install.cmd / uninstall.cmd   publish to %LOCALAPPDATA%\Programs\PhotoShrink and --install / --uninstall
+install.cmd / uninstall.cmd   single-file framework-dependent publish to %LOCALAPPDATA%\Programs\PhotoShrink, then --install / --uninstall
 ```
 
 ## Rules that must hold

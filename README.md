@@ -52,14 +52,15 @@ WinForms.
 
 ## Install
 
-Easiest: double-click **`install.cmd`**. It publishes the program to
-`%LOCALAPPDATA%\Programs\PhotoShrink` and registers it from there.
+Easiest: double-click **`install.cmd`**. It publishes the program as a single `PhotoShrink.exe` in
+`%LOCALAPPDATA%\Programs\PhotoShrink` and registers it from there. The exe is framework-dependent
+(about 0.3 MB): it needs the .NET 10 Desktop Runtime, which the .NET 10 SDK includes.
 
 The menu points at whatever copy of `PhotoShrink.exe` you install from, so put it somewhere it will
 stay (not in `bin\Debug`, which a Clean deletes). By hand, that's:
 
 ```
-dotnet publish PhotoShrink\PhotoShrink.csproj -c Release -o "%LOCALAPPDATA%\Programs\PhotoShrink"
+dotnet publish PhotoShrink\PhotoShrink.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=embedded -o "%LOCALAPPDATA%\Programs\PhotoShrink"
 "%LOCALAPPDATA%\Programs\PhotoShrink\PhotoShrink.exe" --install
 ```
 

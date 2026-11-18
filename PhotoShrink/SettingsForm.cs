@@ -7,8 +7,9 @@ internal sealed class SettingsForm : Form
     private readonly Dictionary<ShrinkMode, RadioButton> _modes = new();
     private readonly CheckBox _confirm = new() { Text = "Ask before shrinking (shows which option above is used)", AutoSize = true };
     private readonly Label _state = new() { AutoSize = false, Width = 470, Height = 80 };
-    private readonly Button _install = new() { Text = "Install menu", Width = 130 };
-    private readonly Button _uninstall = new() { Text = "Uninstall", Width = 130 };
+    // AutoSize: the labels change with the install state (see RefreshState).
+    private readonly Button _install = new() { AutoSize = true, MinimumSize = new Size(130, 0), Padding = new Padding(6, 0, 6, 0) };
+    private readonly Button _uninstall = new() { Text = "Remove from right-click menu", AutoSize = true, MinimumSize = new Size(130, 0), Padding = new Padding(6, 0, 6, 0) };
 
     public SettingsForm()
     {
@@ -95,9 +96,9 @@ internal sealed class SettingsForm : Form
         layout.Controls.Add(buttonRow);
 
         _install.Click += (_, _) => Run(() => ShellIntegration.Install(ShellIntegration.CurrentExePath),
-            "Installed. Right-click a photo → Show more options → Shrink photo.");
+            "Added. Right-click a photo → Show more options → Shrink photo.\nThe Send To shortcuts were added too.");
         _uninstall.Click += (_, _) => Run(ShellIntegration.Uninstall,
-            "Uninstalled. All menu entries and Send To shortcuts were removed.");
+            "Removed. The right-click menu entries and Send To shortcuts are gone.\nYou can delete PhotoShrink.exe now if you don't want it.");
 
         Controls.Add(layout);
         RefreshState();
@@ -150,16 +151,20 @@ internal sealed class SettingsForm : Form
         string me = ShellIntegration.CurrentExePath;
         if (exe == null)
         {
-            _state.Text = "Not installed.\nInstall registers this copy:\n" + me;
+            _state.Text = "Not on the right-click menu yet.\nAdding it will run this copy:\n" + me;
             _uninstall.Enabled = ShellIntegration.ListInstalledItems().Any();
         }
         else
         {
             bool same = string.Equals(exe, me, StringComparison.OrdinalIgnoreCase);
-            _state.Text = "Installed. The menu runs:\n" + exe +
-                          (same ? "" : "\n(Not this copy. Click Install to point it here.)");
+            _state.Text = "On the right-click menu. It runs:\n" + exe +
+                          (same ? "" : "\n(Not this copy. Click \"Use this copy for the menu\" to switch.)");
             _uninstall.Enabled = true;
         }
-        _install.Text = exe == null ? "Install menu" : "Reinstall menu";
+        _install.Text = exe == null
+            ? "Add to right-click menu"
+            : string.Equals(exe, me, StringComparison.OrdinalIgnoreCase)
+                ? "Repair right-click menu"
+                : "Use this copy for the menu";
     }
 }

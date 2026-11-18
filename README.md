@@ -64,7 +64,8 @@ dotnet publish PhotoShrink\PhotoShrink.csproj -c Release -r win-x64 --self-conta
 "%LOCALAPPDATA%\Programs\PhotoShrink\PhotoShrink.exe" --install
 ```
 
-or double-click `PhotoShrink.exe` and click **Install menu** in the settings window.
+or double-click `PhotoShrink.exe` and click **Add to right-click menu** in the settings window. (When it is already on the menu, the button
+reads **Repair right-click menu**, or **Use this copy for the menu** if the menu points at a different copy.)
 
 Install is per user: it writes only under `HKEY_CURRENT_USER\Software\Classes` and your Send To
 folder, so it doesn't need admin rights and doesn't affect other users. It adds:
@@ -86,7 +87,7 @@ Double-click **`uninstall.cmd`** (removes the menu, the shortcuts and the progra
 PhotoShrink.exe --uninstall
 ```
 
-or click **Uninstall** in the settings window. This removes every registry key PhotoShrink added (the
+or click **Remove from right-click menu** in the settings window. This removes every registry key PhotoShrink added (the
 `PhotoShrink` verb under each extension, the old `PhotoShrink.Menu` key from version 1 if present, and any
 `SystemFileAssociations\<ext>\shell` parent keys it left empty) and the three Send To shortcuts.
 Then delete the program folder, and `%APPDATA%\PhotoShrink` if you want the setting gone too.

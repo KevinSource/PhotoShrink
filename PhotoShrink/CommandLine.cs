@@ -12,11 +12,20 @@ internal sealed class CommandLine
     public bool Uninstall { get; private set; }
     public bool Silent { get; private set; }
     public string? ReportPath { get; private set; }
+
+    /// <summary>--mode recycle|originals|copy overrides the saved setting for this run.</summary>
+    public ShrinkMode? Mode { get; private set; }
+
+    /// <summary>--yes skips the confirmation dialog.</summary>
+    public bool Yes { get; private set; }
+
+    /// <summary>--test-undo (test kit only): undo the batch right after it finishes and report that too.</summary>
+    public bool TestUndo { get; private set; }
     public List<string> Files { get; } = new();
 
     public const string Usage =
         "Usage:\n" +
-        "  PhotoShrink.exe --max <pixels> <file> [file …]\n" +
+        "  PhotoShrink.exe --max <pixels> [--mode recycle|originals|copy] [--yes] <file> [file …]\n" +
         "  PhotoShrink.exe --install | --uninstall [--silent]\n" +
         "  PhotoShrink.exe            (settings window)";
 
@@ -48,6 +57,17 @@ internal sealed class CommandLine
                 case "--silent":
                 case "/silent":
                     cl.Silent = true;
+                    break;
+                case "--mode":
+                    if (i + 1 >= args.Count || !ShrinkModeText.TryParse(args[++i], out var mode))
+                        throw new ArgumentException("--mode must be recycle, originals or copy.");
+                    cl.Mode = mode;
+                    break;
+                case "--yes":
+                    cl.Yes = true;
+                    break;
+                case "--test-undo":
+                    cl.TestUndo = true;
                     break;
                 case "--report":
                     if (i + 1 >= args.Count)

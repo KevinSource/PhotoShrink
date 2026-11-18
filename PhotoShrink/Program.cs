@@ -9,7 +9,10 @@ internal static class Program
     ///   PhotoShrink.exe --install | --uninstall  register / remove the menu and Send To shortcuts
     /// Extra switches:
     ///   --silent          no message box after --install / --uninstall
-    ///   --report path     append a JSON line per batch to path and skip the summary window (testing)
+    ///   --mode m          recycle | originals | copy — overrides the saved setting for this run
+    ///   --yes             skip the confirmation dialog
+    ///   --report path     append a JSON line per batch to path and skip dialogs and the summary (testing)
+    ///   --test-undo       with --report: undo the batch straight away and report that too (testing)
     /// </summary>
     [STAThread]
     private static int Main(string[] args)
@@ -50,7 +53,7 @@ internal static class Program
         {
             ApplicationConfiguration.Initialize();
             var settings = Settings.Load();
-            var form = new ProgressForm(coordinator, cl.MaxSize.Value, settings, cl.ReportPath);
+            var form = new ProgressForm(coordinator, cl, settings);
             Application.Run(form);
         }
         return 0;

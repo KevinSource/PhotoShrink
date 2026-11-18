@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace PhotoShrink;
 
-/// <summary>Shrinks one photo in place. Never throws: every outcome is a <see cref="ShrinkResult"/>.</summary>
+/// <summary>Shrinks one photo. Never throws: every outcome is a <see cref="ShrinkResult"/>.</summary>
 internal static class ImageShrinker
 {
     private const int OrientationTag = 0x0112;
@@ -19,7 +19,7 @@ internal static class ImageShrinker
     private static readonly ImageCodecInfo JpegCodec =
         ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
 
-    public static ShrinkResult Shrink(string path, int maxSize, int jpegQuality)
+    public static ShrinkResult Shrink(string path, int maxSize, int jpegQuality, ShrinkMode mode)
     {
         var r = new ShrinkResult { Path = path };
         string? tempPath = null;
@@ -124,14 +124,55 @@ internal static class ImageShrinker
                 // Read the temp file back from disk and make sure it's a good image of the right size.
                 VerifyReadable(tempPath, newW, newH);
 
-                ReplaceOriginal(tempPath, path);
-                tempPath = null; // consumed
+                // Put it in place. The original is never written to: it is moved (to the Recycle Bin
+                // or the Originals folder) only after the shrunk file has been verified.
+                string outPath;
+                switch (mode)
+                {
+                    case ShrinkMode.SaveCopy:
+                        outPath = FileMover.MoveToCopy(tempPath, path, maxSize);
+                        tempPath = null;
+                        r.Disposition = OriginalDisposition.KeptInPlace;
+                        break;
+
+                    case ShrinkMode.RecycleBin when RecycleBin.IsAvailableFor(path):
+                        RecycledItem? item = RecycleBin.Recycle(path); // throws (original untouched) if it can't
+                        try
+                        {
+                            File.Move(tempPath, path);
+                        }
+                        catch (Exception ex)
+                        {
+                            string kept = Path.GetFileName(tempPath);
+                            tempPath = null; // keep it: it's now the only shrunk copy
+                            throw new IOException($"the original is in the Recycle Bin, but the shrunk file could not take its place ({ex.Message}); it was left as {kept}");
+                        }
+                        tempPath = null;
+                        outPath = path;
+                        r.Disposition = OriginalDisposition.RecycleBin;
+                        r.OriginalBackupPath = item?.DataPath;
+                        r.RecycleInfoPath = item?.InfoPath;
+                        if (item == null)
+                            r.Note = "couldn't find the original in the Recycle Bin afterwards, so Undo can't restore it";
+                        break;
+
+                    default: // OriginalsFolder, or Recycle Bin mode on a drive that has none
+                        r.OriginalBackupPath = FileMover.SwapViaOriginalsFolder(tempPath, path);
+                        tempPath = null;
+                        outPath = path;
+                        r.Disposition = OriginalDisposition.OriginalsFolder;
+                        r.FellBackToOriginalsFolder = mode == ShrinkMode.RecycleBin;
+                        break;
+                }
 
                 // Keep dates so photo apps still sort the file where it was.
-                File.SetCreationTimeUtc(path, createdUtc);
-                File.SetLastWriteTimeUtc(path, modifiedUtc);
+                File.SetCreationTimeUtc(outPath, createdUtc);
+                File.SetLastWriteTimeUtc(outPath, modifiedUtc);
 
-                r.NewBytes = new FileInfo(path).Length;
+                var outInfo = new FileInfo(outPath);
+                r.OutputPath = outPath;
+                r.NewBytes = outInfo.Length;
+                r.OutputWriteTimeUtc = outInfo.LastWriteTimeUtc;
                 r.Status = ShrinkStatus.Shrunk;
                 return r;
             }
@@ -190,28 +231,6 @@ internal static class ImageShrinker
         catch (Exception ex) when (ex is ArgumentException or OutOfMemoryException or ExternalException)
         {
             throw new IOException("verification failed: the shrunk temp file could not be read back as an image");
-        }
-    }
-
-    /// <summary>
-    /// Swaps the temp file in for the original. Both are in the same folder, so this is a rename;
-    /// the original is replaced whole or not at all, never half-written.
-    /// </summary>
-    private static void ReplaceOriginal(string tempPath, string path)
-    {
-        try
-        {
-            // ReplaceFile keeps the original's ACLs, attributes and alternate streams.
-            File.Replace(tempPath, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
-        }
-        catch (IOException) when (File.Exists(tempPath) && File.Exists(path))
-        {
-            // Some file systems (FAT/exFAT, some network shares) don't support ReplaceFile.
-            File.Move(tempPath, path, overwrite: true);
-        }
-        catch (PlatformNotSupportedException)
-        {
-            File.Move(tempPath, path, overwrite: true);
         }
     }
 

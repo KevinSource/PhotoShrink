@@ -65,6 +65,10 @@ internal static class Program
         RunTwoBatches(interleaved: true);
         RunTwoBatches(interleaved: false);
         RunSendTo(originals, 1600);
+        RunRecycleBinWithUndo(originals, 1600);
+        RunOriginalsFolderUndo(originals, 2400);
+        RunSaveCopy(originals, 1600);
+        RunSaveCopyUndo(originals, 1200);
 
         W();
         W($"==== {_checks - _failures} of {_checks} checks passed, {_failures} failed ====");
@@ -120,6 +124,7 @@ internal static class Program
                     Check(after.Width == size && after.Height == (int)Math.Round(4000.0 * size / 6000), $"{name}: {after.Width}x{after.Height} has long edge {size}");
                     Check(after.Format == "Jpeg", $"{name}: still JPEG");
                     CheckDates(f, name);
+                    CheckBackup(r, orig, name);
                     break;
                 case "portrait_exif6.jpg":
                     Check(r.Status == "Shrunk", $"{name}: shrunk");
@@ -127,6 +132,7 @@ internal static class Program
                     Check(after.Orientation == 0, $"{name}: no orientation tag left (pixels are upright)");
                     Check(IsUpright(f), $"{name}: red TOP bar is at the top, arrow points up");
                     CheckDates(f, name);
+                    CheckBackup(r, orig, name);
                     break;
                 case "transparent.png":
                     if (r.Status == "Shrunk")
@@ -135,6 +141,7 @@ internal static class Program
                         Check(Math.Max(after.Width, after.Height) == size, $"{name}: long edge {size}");
                         Check(CornerIsTransparent(f), $"{name}: transparency kept (corner alpha = 0, centre opaque)");
                         CheckDates(f, name);
+                        CheckBackup(r, orig, name);
                     }
                     else
                     {
@@ -297,21 +304,137 @@ internal static class Program
         W();
     }
 
+    // ---------------------------------------------------------------- modes and undo
+
+    private static void RunRecycleBinWithUndo(string originals, int size)
+    {
+        W($"#### Recycle Bin mode at {size} px, then Undo");
+        string dir = FreshCopy(originals, $"recycle-{size}");
+        var files = Directory.GetFiles(dir).OrderBy(f => f).ToList();
+        string report = Path.Combine(_work, "report-recycle.jsonl");
+        WaitAll(LaunchPerFile(size, report, files, "recycle", testUndo: true));
+        var batches = ReadReport(report);
+        var undo = ReadUndo(report);
+        Check(batches.Count == 1, "one batch");
+        if (batches.Count != 1) return;
+        var shrunk = batches[0].Results.Where(r => r.Status == "Shrunk").ToList();
+        W($"  shrunk {shrunk.Count}; originals sent to:");
+        foreach (var r in shrunk)
+            W($"    {Path.GetFileName(r.Path),-20} {r.Disposition,-16} {r.BackupPath}");
+        Check(shrunk.Count >= 2, "at least the two JPEGs were shrunk");
+        Check(shrunk.All(r => r.Disposition == "RecycleBin"), "every original went to the Recycle Bin (no fallback on this drive)");
+        Check(shrunk.All(r => r.BackupPath != null && r.InfoPath != null &&
+                              Path.GetFileName(r.BackupPath).StartsWith("$R") && Path.GetFileName(r.InfoPath).StartsWith("$I")),
+            "each original was found in the Recycle Bin ($R data + $I info file)");
+        PrintSummary(batches[0]);
+        Check(undo.Count == shrunk.Count && undo.All(u => u.Ok), $"undo: {undo.Count(u => u.Ok)} of {shrunk.Count} put back");
+        foreach (var u in undo) W($"    undo {Path.GetFileName(u.Path),-20} {(u.Ok ? "ok" : "FAIL")}  {u.Message}");
+        Check(files.All(f => SameBytes(f, Path.Combine(originals, Path.GetFileName(f)))), "after undo every file is byte-identical to the original");
+        Check(shrunk.All(r => !File.Exists(r.BackupPath!) && !File.Exists(r.InfoPath!)), "the Recycle Bin entries are gone (nothing left behind)");
+        CheckDatesAll(files);
+        CheckNoTempFiles(dir);
+        W();
+    }
+
+    private static void RunOriginalsFolderUndo(string originals, int size)
+    {
+        W($"#### Originals-folder mode at {size} px, then Undo");
+        string dir = FreshCopy(originals, $"originals-undo-{size}");
+        var files = Directory.GetFiles(dir).OrderBy(f => f).ToList();
+        string report = Path.Combine(_work, "report-originals-undo.jsonl");
+        WaitAll(LaunchPerFile(size, report, files, "originals", testUndo: true));
+        var batches = ReadReport(report);
+        var undo = ReadUndo(report);
+        int shrunk = batches.Count == 1 ? batches[0].Results.Count(r => r.Status == "Shrunk") : -1;
+        Check(batches.Count == 1 && shrunk >= 2, $"one batch, {shrunk} shrunk");
+        Check(undo.Count == shrunk && undo.All(u => u.Ok), $"undo: {undo.Count(u => u.Ok)} of {shrunk} put back");
+        Check(files.All(f => SameBytes(f, Path.Combine(originals, Path.GetFileName(f)))), "after undo every file is byte-identical to the original");
+        Check(!Directory.Exists(Path.Combine(dir, "Originals")), "the emptied Originals folder was removed");
+        CheckDatesAll(files);
+        CheckNoTempFiles(dir);
+        W();
+    }
+
+    private static void RunSaveCopy(string originals, int size)
+    {
+        W($"#### Save-a-copy mode at {size} px");
+        string dir = FreshCopy(originals, $"copy-{size}");
+        var files = Directory.GetFiles(dir).OrderBy(f => f).ToList();
+        string report = Path.Combine(_work, "report-copy.jsonl");
+        WaitAll(LaunchPerFile(size, report, files, "copy"));
+        var batches = ReadReport(report);
+        Check(batches.Count == 1, "one batch");
+        if (batches.Count != 1) return;
+        Check(files.All(f => SameBytes(f, Path.Combine(originals, Path.GetFileName(f)))), "every original is byte-identical (untouched)");
+        var shrunk = batches[0].Results.Where(r => r.Status == "Shrunk").ToList();
+        W($"  {"copy",-28} {"size/dims",-24}");
+        foreach (var r in shrunk)
+        {
+            string copy = r.OutputPath ?? "";
+            var info = File.Exists(copy) ? Inspect(copy) : new Info(0, 0, 0, 0, "missing");
+            W($"  {Path.GetFileName(copy),-28} {info.Short(),-24}");
+            string expect = Path.GetFileNameWithoutExtension(r.Path) + $" ({size})" + Path.GetExtension(r.Path);
+            Check(r.Disposition == "KeptInPlace" && Path.GetFileName(copy) == expect && Math.Max(info.Width, info.Height) == size,
+                $"{expect}: saved beside the original, long edge {size}");
+            CheckDates(copy, Path.GetFileName(copy));
+        }
+        var portraitCopy = Path.Combine(dir, $"portrait_exif6 ({size}).jpg");
+        Check(File.Exists(portraitCopy) && IsUpright(portraitCopy), "portrait copy is upright");
+        int extra = Directory.GetFiles(dir).Length - files.Count;
+        Check(extra == shrunk.Count, $"only the {shrunk.Count} shrunk copies were added (found {extra} new files)");
+        PrintSummary(batches[0]);
+        W();
+    }
+
+    private static void RunSaveCopyUndo(string originals, int size)
+    {
+        W($"#### Save-a-copy mode at {size} px, then Undo");
+        string dir = FreshCopy(originals, $"copy-undo-{size}");
+        var files = Directory.GetFiles(dir).OrderBy(f => f).ToList();
+        string report = Path.Combine(_work, "report-copy-undo.jsonl");
+        WaitAll(LaunchPerFile(size, report, files, "copy", testUndo: true));
+        var batches = ReadReport(report);
+        var undo = ReadUndo(report);
+        int shrunk = batches.Count == 1 ? batches[0].Results.Count(r => r.Status == "Shrunk") : -1;
+        Check(undo.Count == shrunk && shrunk >= 2 && undo.All(u => u.Ok), $"undo: {undo.Count(u => u.Ok)} of {shrunk} copies deleted");
+        Check(Directory.GetFiles(dir).Length == files.Count, "folder is back to the original files only");
+        Check(files.All(f => SameBytes(f, Path.Combine(originals, Path.GetFileName(f)))), "originals untouched");
+        W();
+    }
+
+    private static void CheckDatesAll(List<string> files)
+    {
+        bool ok = files.All(f => Math.Abs((File.GetLastWriteTime(f) - Modified).TotalSeconds) < 2);
+        Check(ok, "modified dates are the originals' again");
+    }
+
+    private static void PrintSummary(Batch b)
+    {
+        W("  Summary window text:");
+        foreach (var line in b.Summary.Split('\n'))
+            W("  | " + line.TrimEnd('\r'));
+    }
+
     // ================================================================ process helpers
 
-    private static List<Process> LaunchPerFile(int size, string report, IEnumerable<string> files)
+    private static List<Process> LaunchPerFile(int size, string report, IEnumerable<string> files,
+        string mode = "originals", bool testUndo = false)
     {
         var list = new List<Process>();
         foreach (var f in files)
-            list.AddRange(LaunchOne(size, report, new[] { f }));
+            list.AddRange(LaunchOne(size, report, new[] { f }, mode, testUndo));
         return list;
     }
 
-    private static List<Process> LaunchOne(int size, string report, IEnumerable<string> files)
+    private static List<Process> LaunchOne(int size, string report, IEnumerable<string> files,
+        string mode = "originals", bool testUndo = false)
     {
         var psi = new ProcessStartInfo(_exe) { UseShellExecute = false };
         psi.ArgumentList.Add("--max");
         psi.ArgumentList.Add(size.ToString());
+        psi.ArgumentList.Add("--mode");
+        psi.ArgumentList.Add(mode);
+        if (testUndo) psi.ArgumentList.Add("--test-undo");
         psi.ArgumentList.Add("--report");
         psi.ArgumentList.Add(report);
         foreach (var f in files) psi.ArgumentList.Add(f);
@@ -335,8 +458,27 @@ internal static class Program
 
     // ================================================================ report
 
-    private sealed record Res(string Path, string Status, string? Reason, long OldBytes, long NewBytes);
-    private sealed record Batch(int MaxSize, List<Res> Results, string Summary);
+    private sealed record Res(string Path, string Status, string? Reason, long OldBytes, long NewBytes,
+        string Disposition, string? OutputPath, string? BackupPath, string? InfoPath);
+    private sealed record Batch(int MaxSize, string Mode, List<Res> Results, string Summary);
+    private sealed record UndoRes(string Path, bool Ok, string Message);
+
+    private static string? Str(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static List<UndoRes> ReadUndo(string path)
+    {
+        var list = new List<UndoRes>();
+        if (!File.Exists(path)) return list;
+        foreach (var line in File.ReadAllLines(path).Where(l => l.Trim().Length > 0))
+        {
+            using var doc = JsonDocument.Parse(line);
+            if (!doc.RootElement.TryGetProperty("undo", out _)) continue;
+            foreach (var e in doc.RootElement.GetProperty("results").EnumerateArray())
+                list.Add(new UndoRes(Str(e, "Path")!, e.GetProperty("Ok").GetBoolean(), Str(e, "Message") ?? ""));
+        }
+        return list;
+    }
 
     private static List<Batch> ReadReport(string path)
     {
@@ -346,13 +488,19 @@ internal static class Program
         {
             using var doc = JsonDocument.Parse(line);
             var root = doc.RootElement;
+            if (root.TryGetProperty("undo", out _)) continue;
             var results = root.GetProperty("results").EnumerateArray().Select(e => new Res(
-                e.GetProperty("Path").GetString()!,
-                e.GetProperty("Status").GetString()!,
-                e.GetProperty("Reason").ValueKind == JsonValueKind.String ? e.GetProperty("Reason").GetString() : null,
+                Str(e, "Path")!,
+                Str(e, "Status")!,
+                Str(e, "Reason"),
                 e.GetProperty("OldBytes").GetInt64(),
-                e.GetProperty("NewBytes").GetInt64())).ToList();
-            list.Add(new Batch(root.GetProperty("maxSize").GetInt32(), results, root.GetProperty("summary").GetString() ?? ""));
+                e.GetProperty("NewBytes").GetInt64(),
+                Str(e, "Disposition") ?? "",
+                Str(e, "OutputPath"),
+                Str(e, "OriginalBackupPath"),
+                Str(e, "RecycleInfoPath"))).ToList();
+            list.Add(new Batch(root.GetProperty("maxSize").GetInt32(), Str(root, "mode") ?? "",
+                results, Str(root, "summary") ?? ""));
         }
         return list;
     }
@@ -392,9 +540,15 @@ internal static class Program
             $"{name}: dates kept (created {c:yyyy-MM-dd HH:mm:ss}, modified {m:yyyy-MM-dd HH:mm:ss})");
     }
 
+    private static void CheckBackup(Res r, string orig, string name)
+    {
+        Check(r.Disposition == "OriginalsFolder" && r.BackupPath != null && File.Exists(r.BackupPath) && SameBytes(r.BackupPath, orig),
+            $"{name}: original kept unchanged in {(r.BackupPath != null ? Path.GetFileName(Path.GetDirectoryName(r.BackupPath)) + "\\" : "?")}");
+    }
+
     private static void CheckNoTempFiles(string dir)
     {
-        var tmp = Directory.GetFiles(dir, "*.photoshrink.tmp", SearchOption.TopDirectoryOnly);
+        var tmp = Directory.GetFiles(dir, "*.photoshrink*.tmp", SearchOption.TopDirectoryOnly);
         Check(tmp.Length == 0, "no temp files left behind");
     }
 

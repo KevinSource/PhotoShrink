@@ -4,14 +4,15 @@ namespace PhotoShrink;
 
 /// <summary>
 /// Small window shown by the leader process: first while it gathers the files from the
-/// other processes Explorer started, then while it shrinks them. Opens the summary at the end.
+/// other processes Explorer started, then (after the optional confirmation) while it shrinks
+/// them. Opens the summary at the end.
 /// </summary>
 internal sealed class ProgressForm : Form
 {
     private readonly BatchCoordinator _coordinator;
+    private readonly CommandLine _cl;
     private readonly int _maxSize;
-    private readonly Settings _settings;
-    private readonly string? _reportPath;
+    private Settings _settings;
 
     private readonly Label _status = new() { AutoSize = false, Dock = DockStyle.Top, Height = 24 };
     private readonly ProgressBar _bar = new() { Dock = DockStyle.Top, Height = 22, Style = ProgressBarStyle.Marquee };
@@ -20,14 +21,14 @@ internal sealed class ProgressForm : Form
     private volatile bool _cancelRequested;
     private bool _finished;
 
-    public ProgressForm(BatchCoordinator coordinator, int maxSize, Settings settings, string? reportPath)
+    public ProgressForm(BatchCoordinator coordinator, CommandLine cl, Settings settings)
     {
         _coordinator = coordinator;
-        _maxSize = maxSize;
+        _cl = cl;
+        _maxSize = cl.MaxSize!.Value;
         _settings = settings;
-        _reportPath = reportPath;
 
-        Text = $"PhotoShrink — {maxSize} px";
+        Text = $"PhotoShrink — {_maxSize} px";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = true;
@@ -41,7 +42,7 @@ internal sealed class ProgressForm : Form
         _cancel.Location = new Point(buttonRow.Width - _cancel.Width, 4);
         buttonRow.Controls.Add(_cancel);
         buttonRow.Resize += (_, _) => _cancel.Left = buttonRow.ClientSize.Width - _cancel.Width;
-        _cancel.Click += (_, _) => { _cancelRequested = true; _cancel.Enabled = false; _status.Text = "Cancelling…"; };
+        _cancel.Click += (_, _) => RequestCancel();
 
         // Dock order: last added is laid out first for Top docking.
         Controls.Add(_file);
@@ -53,14 +54,19 @@ internal sealed class ProgressForm : Form
         _status.Text = "Gathering the selected files…";
     }
 
+    private void RequestCancel()
+    {
+        _cancelRequested = true;
+        _cancel.Enabled = false;
+        _status.Text = "Cancelling…";
+    }
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (!_finished && e.CloseReason == CloseReason.UserClosing)
         {
             // Closing the window while working means "cancel"; finish the current file(s) first.
-            _cancelRequested = true;
-            _cancel.Enabled = false;
-            _status.Text = "Cancelling…";
+            RequestCancel();
             e.Cancel = true;
             return;
         }
@@ -86,12 +92,27 @@ internal sealed class ProgressForm : Form
 
     private async Task RunAsync()
     {
-        var sw = Stopwatch.StartNew();
-
         // Runs on the UI thread, which is the thread that owns the mutex.
         var gathered = new Progress<int>(n => _status.Text = $"Gathering the selected files… {n}");
         IReadOnlyList<string> files = await _coordinator.CollectAsync(_settings.QuietPeriodMs, gathered);
 
+        ShrinkMode mode = _cl.Mode ?? _settings.Mode;
+        bool ask = _cl.ReportPath == null && !_cl.Yes && _settings.ConfirmBeforeShrinking;
+        if (ask && !_cancelRequested)
+        {
+            _status.Text = $"{files.Count} file(s) selected.";
+            using var confirm = new ConfirmForm(files.Count, _maxSize, _cl.Mode);
+            if (confirm.ShowDialog(this) != DialogResult.OK)
+            {
+                _finished = true;
+                Close();
+                return;
+            }
+            mode = confirm.Mode;
+            _settings = Settings.Load(); // the user may have changed settings from the dialog
+        }
+
+        var sw = Stopwatch.StartNew();
         _bar.Style = ProgressBarStyle.Continuous;
         _bar.Maximum = Math.Max(1, files.Count);
         _bar.Value = 0;
@@ -122,7 +143,7 @@ internal sealed class ProgressForm : Form
                 }
                 else
                 {
-                    results[i] = ImageShrinker.Shrink(files[i], _maxSize, quality);
+                    results[i] = ImageShrinker.Shrink(files[i], _maxSize, quality, mode);
                 }
                 Interlocked.Increment(ref done);
                 report.Report(Path.GetFileName(files[i]));
@@ -130,16 +151,18 @@ internal sealed class ProgressForm : Form
         });
 
         _finished = true;
-        string text = Summary.BuildText(results, _maxSize, sw.Elapsed);
+        string text = Summary.BuildText(results, _maxSize, mode, sw.Elapsed);
 
-        if (_reportPath != null)
+        if (_cl.ReportPath != null)
         {
-            Summary.AppendReport(_reportPath, results, _maxSize, text);
+            Summary.AppendReport(_cl.ReportPath, results, _maxSize, mode, text);
+            if (_cl.TestUndo)
+                Summary.AppendUndoReport(_cl.ReportPath, FileMover.Undo(results));
             Close();
             return;
         }
 
-        var summary = new SummaryForm(text, results);
+        var summary = new SummaryForm(text, results, mode);
         summary.FormClosed += (_, _) => Close();
         Hide();
         summary.Show();

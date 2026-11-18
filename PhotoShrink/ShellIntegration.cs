@@ -13,6 +13,7 @@ namespace PhotoShrink;
 ///
 ///   SystemFileAssociations\.jpg\shell\PhotoShrink            (same for .jpeg .png .gif)
 ///       MUIVerb          = "Shrink photo"
+///       Icon             = "C:\…\PhotoShrink.exe",0
 ///       SubCommands      = ""                                 (empty = items are in the shell subkey below)
 ///       MultiSelectModel = "Player"
 ///     shell\1_1200
@@ -63,6 +64,7 @@ internal static class ShellIntegration
         {
             using var verb = Registry.CurrentUser.CreateSubKey(VerbKeyPath(ext));
             verb.SetValue("MUIVerb", MenuText);
+            verb.SetValue("Icon", $"\"{exePath}\",0");
             verb.SetValue("SubCommands", "");
             verb.SetValue("MultiSelectModel", "Player");
             for (int i = 0; i < Sizes.Length; i++)

@@ -28,7 +28,10 @@ PhotoShrink/                  the app (WinExe, no console window)
   SettingsForm.cs             no-argument launch: When shrinking, Ask before shrinking, JPEG quality, install/uninstall
   Settings.cs                 %APPDATA%\PhotoShrink\settings.json (Mode, ConfirmBeforeShrinking, JpegQuality, QuietPeriodMs)
   ShellIntegration.cs         registry keys + Send To .lnk files (IShellLinkW COM interop)
+  AppIcon.cs                  loads the embedded PhotoShrink.ico for the windows
+  PhotoShrink.ico             app icon, 16–256 px (exe, windows, menu entry, Send To); made by tools/make-icon.py
 PhotoShrink.TestKit/          console app: end-to-end tests (makes images, launches exe per file)
+tools/make-icon.py            draws PhotoShrink.ico (Pillow); small sizes get bolder arrows
 run-tests.cmd                 build + run the test kit
 install.cmd / uninstall.cmd   single-file framework-dependent publish to %LOCALAPPDATA%\Programs\PhotoShrink, then --install / --uninstall
 ```

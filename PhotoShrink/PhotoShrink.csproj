@@ -15,6 +15,13 @@
     <!-- Explorer may start dozens of copies at once; keep startup cheap. -->
     <TieredPGO>true</TieredPGO>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Icon for the exe file (Explorer, the right-click menu entry, Send To shortcuts). -->
+    <ApplicationIcon>PhotoShrink.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same icon for the windows; see AppIcon.cs. Regenerate with tools/make-icon.py. -->
+    <EmbeddedResource Include="PhotoShrink.ico" LogicalName="PhotoShrink.ico" />
+  </ItemGroup>
 
 </Project>

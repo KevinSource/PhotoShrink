@@ -16,6 +16,7 @@ internal sealed class ConfirmForm : Form
         _modeOverride = modeOverride;
 
         Text = "PhotoShrink";
+        AppIcon.Apply(this);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;

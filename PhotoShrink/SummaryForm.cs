@@ -18,6 +18,7 @@ internal sealed class SummaryForm : Form
         Text = failed > 0
             ? $"PhotoShrink — {shrunk} shrunk, {failed} failed"
             : $"PhotoShrink — {shrunk} shrunk";
+        AppIcon.Apply(this);
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(860, 480);

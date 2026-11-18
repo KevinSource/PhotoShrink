@@ -14,6 +14,7 @@ internal sealed class SettingsForm : Form
     public SettingsForm()
     {
         Text = "PhotoShrink settings";
+        AppIcon.Apply(this);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;

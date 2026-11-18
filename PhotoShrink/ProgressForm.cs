@@ -29,6 +29,7 @@ internal sealed class ProgressForm : Form
         _settings = settings;
 
         Text = $"PhotoShrink — {_maxSize} px";
+        AppIcon.Apply(this);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = true;

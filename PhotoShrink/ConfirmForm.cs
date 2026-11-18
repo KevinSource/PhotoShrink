@@ -24,7 +24,7 @@ internal sealed class ConfirmForm : Form
         Font = SystemFonts.MessageBoxFont ?? Font;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        TopMost = true;
+        ShowInTaskbar = true; // the progress window is hidden while we ask, so this needs its own taskbar button
 
         var layout = new FlowLayoutPanel
         {
@@ -69,15 +69,35 @@ internal sealed class ConfirmForm : Form
 
         settings.Click += (_, _) =>
         {
-            using var f = new SettingsForm();
-            f.ShowDialog(this);
-            RefreshMode();
+            // Make this dialog invisible while Settings is open. (Hide() would end ShowDialog.)
+            Opacity = 0;
+            try
+            {
+                using var f = new SettingsForm();
+                f.ShowDialog();
+            }
+            finally
+            {
+                Opacity = 1;
+                RefreshMode();
+                BringToFront();
+                Activate();
+            }
         };
 
         Controls.Add(layout);
         AcceptButton = ok;
         CancelButton = cancel;
         RefreshMode();
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        // Come to the front once, without staying on top of everything (which hid Settings and its message box).
+        TopMost = true;
+        TopMost = false;
+        Activate();
     }
 
     private void RefreshMode()

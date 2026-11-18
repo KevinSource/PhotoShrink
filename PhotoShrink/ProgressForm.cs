@@ -100,9 +100,9 @@ internal sealed class ProgressForm : Form
         bool ask = _cl.ReportPath == null && !_cl.Yes && _settings.ConfirmBeforeShrinking;
         if (ask && !_cancelRequested)
         {
-            _status.Text = $"{files.Count} file(s) selected.";
+            Hide(); // only the question is on screen while we ask
             using var confirm = new ConfirmForm(files.Count, _maxSize, _cl.Mode);
-            if (confirm.ShowDialog(this) != DialogResult.OK)
+            if (confirm.ShowDialog() != DialogResult.OK)
             {
                 _finished = true;
                 Close();
@@ -110,6 +110,8 @@ internal sealed class ProgressForm : Form
             }
             mode = confirm.Mode;
             _settings = Settings.Load(); // the user may have changed settings from the dialog
+            Show();
+            Activate();
         }
 
         var sw = Stopwatch.StartNew();

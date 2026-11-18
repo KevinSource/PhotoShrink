@@ -112,7 +112,16 @@ internal sealed class SettingsForm : Form
         try
         {
             s.Save();
-            MessageBox.Show(this, "Saved.", "PhotoShrink");
+            if (Modal)
+            {
+                // Opened from the confirmation or summary window: saving takes you straight back there.
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+            else
+            {
+                MessageBox.Show(this, "Saved.", "PhotoShrink");
+            }
         }
         catch (Exception ex)
         {

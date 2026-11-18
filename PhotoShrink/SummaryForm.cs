@@ -52,8 +52,17 @@ internal sealed class SummaryForm : Form
         var settings = new Button { Text = "Settings…", Width = 90 };
         settings.Click += (_, _) =>
         {
-            using var f = new SettingsForm();
-            f.ShowDialog(this);
+            Hide();
+            try
+            {
+                using var f = new SettingsForm();
+                f.ShowDialog();
+            }
+            finally
+            {
+                Show();
+                Activate();
+            }
         };
         _undo.Enabled = shrunk > 0;
         _undo.Click += (_, _) => RunUndo(shrunk);

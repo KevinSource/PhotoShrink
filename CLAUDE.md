@@ -25,13 +25,16 @@ PhotoShrink/                  the app (WinExe, no console window)
   Settings.cs                 %APPDATA%\PhotoShrink\settings.json (JpegQuality, QuietPeriodMs)
   ShellIntegration.cs         registry keys + Send To .lnk files (IShellLinkW COM interop)
 PhotoShrink.TestKit/          console app: end-to-end tests (makes images, launches exe per file)
+run-tests.cmd                 build + run the test kit
+install.cmd / uninstall.cmd   publish to %LOCALAPPDATA%\Programs\PhotoShrink and --install / --uninstall
 ```
 
 ## Rules that must hold
 
 * System.Drawing only — no image NuGet packages.
 * Registry writes only under `HKCU\Software\Classes`. Uninstall must remove everything Install adds:
-  `SystemFileAssociations\<ext>\shell\PhotoShrink` for .jpg/.jpeg/.png/.gif, `PhotoShrink.Menu`, empty
+  `SystemFileAssociations\<ext>\shell\PhotoShrink` for .jpg/.jpeg/.png/.gif (size items
+  nested under each, `SubCommands=""`), the legacy `PhotoShrink.Menu` key, empty
   parent keys, and the three Send To shortcuts. If you add a key, add its removal.
 * Mutex/pipe names include the size so batches at different sizes never mix.
 * A follower process exits only after the leader replied "OK"; otherwise it retries and may become the
@@ -58,5 +61,7 @@ Don't run `--install` on the developer's machine without asking first.
 
 ## Not done (on purpose)
 
+* `ExtendedSubCommandsKey` pointing at a shared HKCU key was tried first: Explorer showed the arrow
+  but an empty flyout. Keep the items nested under each verb with `SubCommands=""`.
 * No packaged IExplorerCommand shell extension; on Windows 11 the menu sits under "Show more options".
 * Metadata (EXIF/GPS/ICC) is not copied to the shrunk file.

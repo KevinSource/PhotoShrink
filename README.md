@@ -48,7 +48,7 @@ folder, so it doesn't need admin rights and doesn't affect other users. It adds:
 
 * the **Shrink photo** submenu for `.jpg`, `.jpeg`, `.png`, `.gif`
   (`HKCU\Software\Classes\SystemFileAssociations\<ext>\shell\PhotoShrink`, with the three size items
-  under `HKCU\Software\Classes\PhotoShrink.Menu`). Because it's registered by file extension under
+  nested under it in a `shell` subkey, flagged by an empty `SubCommands` value). Because it's registered by file extension under
   `SystemFileAssociations`, it keeps working if you change your default photo app.
 * three **Send To** shortcuts: *Shrink photos - 1200 px*, *- 1600 px*, *- 2400 px*. Send To works for
   any file type you select (non-photos are skipped and listed) and passes all files to one process.
@@ -64,7 +64,7 @@ PhotoShrink.exe --uninstall
 ```
 
 or click **Uninstall** in the settings window. This removes every registry key PhotoShrink added (the
-`PhotoShrink` verb under each extension, the `PhotoShrink.Menu` submenu key, and any
+`PhotoShrink` verb under each extension, the old `PhotoShrink.Menu` key from version 1 if present, and any
 `SystemFileAssociations\<ext>\shell` parent keys it left empty) and the three Send To shortcuts.
 Then delete the program folder, and `%APPDATA%\PhotoShrink` if you want the setting gone too.
 

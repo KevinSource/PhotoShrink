@@ -12,16 +12,19 @@ namespace PhotoShrink;
 /// Registry layout (HKCU\Software\Classes = the per-user half of HKEY_CLASSES_ROOT):
 ///
 ///   SystemFileAssociations\.jpg\shell\PhotoShrink            (same for .jpeg .png .gif)
-///       MUIVerb                = "Shrink photo"
-///       ExtendedSubCommandsKey = "PhotoShrink.Menu"          (relative to HKCR)
-///       MultiSelectModel       = "Player"
-///
-///   PhotoShrink.Menu\shell\1_1200
-///       MUIVerb          = "1200 px"
+///       MUIVerb          = "Shrink photo"
+///       SubCommands      = ""                                 (empty = items are in the shell subkey below)
 ///       MultiSelectModel = "Player"
-///       command\(Default) = "C:\…\PhotoShrink.exe" --max 1200 "%1"
-///   PhotoShrink.Menu\shell\2_1600 …
-///   PhotoShrink.Menu\shell\3_2400 …
+///     shell\1_1200
+///         MUIVerb          = "1200 px"
+///         MultiSelectModel = "Player"
+///         command\(Default) = "C:\…\PhotoShrink.exe" --max 1200 "%1"
+///     shell\2_1600 …
+///     shell\3_2400 …
+///
+/// (Version 1 used ExtendedSubCommandsKey pointing at a shared HKCU key. Explorer showed the
+/// "Shrink photo" arrow but an empty flyout, so the items are now nested under each verb.
+/// Install/uninstall still remove that old PhotoShrink.Menu key if it's there.)
 ///
 /// SystemFileAssociations applies by file extension no matter which app is the default
 /// photo viewer, so the menu survives a change of default app.
@@ -35,7 +38,8 @@ internal static class ShellIntegration
 
     public const string VerbName = "PhotoShrink";
     public const string MenuText = "Shrink photo";
-    public const string SubMenuKey = "PhotoShrink.Menu";
+    /// <summary>Shared submenu key used by version 1; only removed now, never written.</summary>
+    public const string LegacySubMenuKey = "PhotoShrink.Menu";
     private const string ClassesRoot = @"Software\Classes";
 
     public static string CurrentExePath =>
@@ -55,26 +59,21 @@ internal static class ShellIntegration
         // Start from a clean slate so a reinstall from a new folder leaves nothing stale.
         RemoveRegistry();
 
-        using (var menu = Registry.CurrentUser.CreateSubKey($@"{ClassesRoot}\{SubMenuKey}"))
+        foreach (string ext in Extensions)
         {
-            menu.SetValue("", "PhotoShrink submenu");
+            using var verb = Registry.CurrentUser.CreateSubKey(VerbKeyPath(ext));
+            verb.SetValue("MUIVerb", MenuText);
+            verb.SetValue("SubCommands", "");
+            verb.SetValue("MultiSelectModel", "Player");
             for (int i = 0; i < Sizes.Length; i++)
             {
                 int size = Sizes[i];
-                using var item = menu.CreateSubKey($@"shell\{i + 1}_{size}");
+                using var item = verb.CreateSubKey($@"shell\{i + 1}_{size}");
                 item.SetValue("MUIVerb", $"{size} px");
                 item.SetValue("MultiSelectModel", "Player");
                 using var cmd = item.CreateSubKey("command");
                 cmd.SetValue("", $"\"{exePath}\" --max {size} \"%1\"");
             }
-        }
-
-        foreach (string ext in Extensions)
-        {
-            using var verb = Registry.CurrentUser.CreateSubKey(VerbKeyPath(ext));
-            verb.SetValue("MUIVerb", MenuText);
-            verb.SetValue("ExtendedSubCommandsKey", SubMenuKey);
-            verb.SetValue("MultiSelectModel", "Player");
         }
 
         Directory.CreateDirectory(SendToFolder);
@@ -99,7 +98,7 @@ internal static class ShellIntegration
     /// <summary>Returns the exe path the menu currently points to, or null if not installed.</summary>
     public static string? InstalledExePath()
     {
-        using var cmd = Registry.CurrentUser.OpenSubKey($@"{ClassesRoot}\{SubMenuKey}\shell\1_{Sizes[0]}\command");
+        using var cmd = Registry.CurrentUser.OpenSubKey($@"{VerbKeyPath(Extensions[0])}\shell\1_{Sizes[0]}\command");
         if (cmd?.GetValue("") is not string command) return null;
         // "C:\path\PhotoShrink.exe" --max 1200 "%1"
         if (command.StartsWith('"'))
@@ -113,8 +112,8 @@ internal static class ShellIntegration
     /// <summary>Lists everything PhotoShrink has registered (for the settings window and tests).</summary>
     public static IEnumerable<string> ListInstalledItems()
     {
-        using (var k = Registry.CurrentUser.OpenSubKey($@"{ClassesRoot}\{SubMenuKey}"))
-            if (k != null) yield return @"HKCU\" + ClassesRoot + @"\" + SubMenuKey;
+        using (var k = Registry.CurrentUser.OpenSubKey($@"{ClassesRoot}\{LegacySubMenuKey}"))
+            if (k != null) yield return @"HKCU\" + ClassesRoot + @"\" + LegacySubMenuKey;
         foreach (string ext in Extensions)
         {
             using var k = Registry.CurrentUser.OpenSubKey(VerbKeyPath(ext));
@@ -126,7 +125,7 @@ internal static class ShellIntegration
 
     private static void RemoveRegistry()
     {
-        Registry.CurrentUser.DeleteSubKeyTree($@"{ClassesRoot}\{SubMenuKey}", throwOnMissingSubKey: false);
+        Registry.CurrentUser.DeleteSubKeyTree($@"{ClassesRoot}\{LegacySubMenuKey}", throwOnMissingSubKey: false);
         foreach (string ext in Extensions)
         {
             Registry.CurrentUser.DeleteSubKeyTree(VerbKeyPath(ext), throwOnMissingSubKey: false);
